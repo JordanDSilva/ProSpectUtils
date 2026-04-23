@@ -1,5 +1,73 @@
 #ProSpect utils
 
+## Dust mass stuff from D'Silva+26
+.New_DustMass_vDTH = function(out, qPAH_VSG = 0.035){
+  
+  new_dust = out$SEDout$dustlum["birth"]/Dale_M2L_variableDTH_func(out$parm["alpha_SF_birth"], qPAH_VSG = qPAH_VSG) + 
+    out$SEDout$dustlum["screen"]/Dale_M2L_variableDTH_func(out$parm["alpha_SF_screen"], qPAH_VSG = qPAH_VSG)
+  
+  return(as.numeric(new_dust))
+}
+.RR14_BPL = function(Z, doDTG = FALSE){
+  
+  ## Remy Ruyer+14 using metallicity dependent XCO
+  ## x = 12 + log(O/H)
+  ## xSol = 12 + log(O/H)Sol
+  
+  ## Z/Zsol = (O/H)/(O/HSol)
+  ## log(Z) - log(Zsol) = log(O/H) - log(O/HSol)
+  ## log(Z)+12 - log(Zsol)-12 = log(O/H)+12 - log(O/Hsol)-12
+  ## log(Z) - log(Zsol) = x - xSol
+  ## log(Z/0.014) + xSol = log(O/H) + 12
+  
+  a = 2.21
+  alphaH = 1.00
+  b = 0.96
+  alphaL = 3.10
+  xt = 8.10
+
+  xSol = 8.69
+  ZOH = log10(Z / 0.014) + xSol
+  
+  GTD = ifelse(
+    ZOH > xt,
+    a + alphaH*(xSol - ZOH),
+    b + alphaL*(xSol - ZOH)
+  )
+  DTG = (10^GTD)^-1
+  
+  ##Mgas = muGal * Mhydrogen
+  ## DTG = Mdust / Mgas
+  ## DTH = Mdust / Mhydrogen = Mdust / (Mgas / muGal) = DTG * muGal = DTG * (1 / (1 - Ysol - Zgal))
+  muGal = 1 / (1 - 0.270 - Z)
+  DTH = DTG*muGal
+  if(doDTG){
+    return(DTG)
+  }else{
+    return(DTH)
+  }
+}
+
+# shivaei24 = fread("~/Documents/DustMassDensity/data/shivaeqPAHZ.csv")
+shivaei24 = data.frame(
+  "OH" = c(7.8741935483871, 7.99354838709677, 8.09516129032258, 8.24838709677419, 8.39354838709678, 8.57903225806452, 8.83064516129032),
+  "q" = c(1.04568527918782, 1.01522842639594, 1.01522842639594, 2.20304568527919, 3.39086294416244, 3.39086294416244, 3.3756345177665) 
+)
+shivaei24_fit = approxfun(
+  shivaei24$OH,
+  shivaei24$q,
+  rule = 2
+)
+.shivaei24_qPAHZ = function(Z){
+  xSol = 8.69
+  ZOH = log10(Z / 0.014) + xSol
+  
+  ff = c(shivaei24_fit(ZOH)) * 0.01
+  ff[ZOH >= 8.4] =  0.035
+  ff[ZOH < 8.1] =  0.01
+  return(ff)
+}
+
 ## Now get some statistics and astrophysics 
 .UV_tophat = function(wave){
   throughput = rep(0L, length(wave))
@@ -238,78 +306,87 @@
   )
 }
 
-.New_DustMass_vDTH = function(out, qPAH_VSG = 0.035){
+.calc_astro = function(bestfit, highout, newDust = TRUE, specz = FALSE, cores = 1){
+  ## provide a prospect and highlander fit RDS
+  ## must have all of the speclib, AGN and Dale templates included in Data 
   
-  new_dust = out$SEDout$dustlum["birth"]/Dale_M2L_variableDTH_func(out$parm["alpha_SF_birth"], qPAH_VSG = qPAH_VSG) + 
-    out$SEDout$dustlum["screen"]/Dale_M2L_variableDTH_func(out$parm["alpha_SF_screen"], qPAH_VSG = qPAH_VSG)
+  Data = bestfit$Data
   
-  return(as.numeric(new_dust))
-}
-.RR14_BPL = function(Z, doDTG = FALSE){
+  nparm = length(bestfit$parm)
+  post = cbind(highout$LD_last$Posterior1, highout$LD_last$Monitor)
+  post = data.table(post)
+  post = post[order(-LP),]
   
-  ## Remy Ruyer+14 using metallicity dependent XCO
-  ## x = 12 + log(O/H)
-  ## xSol = 12 + log(O/H)Sol
+  ## calculating a chisq cut based on the number of parameters to isolate a 1sigma range (from J. Thorne Thesis Codes on GitHub)
+  chisq_cut = max(post$LP) - qchisq(0.68,nparm)/2
+  toppost = post[post$LP > chisq_cut,]
+  toppost[,LP:=NULL]
   
-  ## Z/Zsol = (O/H)/(O/HSol)
-  ## log(Z) - log(Zsol) = log(O/H) - log(O/HSol)
-  ## log(Z)+12 - log(Zsol)-12 = log(O/H)+12 - log(O/Hsol)-12
-  ## log(Z) - log(Zsol) = x - xSol
-  ## log(Z/0.014) + xSol = log(O/H) + 12
-  
-  a = 2.21
-  alphaH = 1.00
-  b = 0.96
-  alphaL = 3.10
-  xt = 8.10
-  
-  # a = par[1]
-  # alphaH = par[2]
-  # b = par[3]
-  # alphaL = par[1]
-  # xt = par[2]
-  
-  xSol = 8.69
-  ZOH = log10(Z / 0.014) + xSol
-  
-  GTD = ifelse(
-    ZOH > xt,
-    a + alphaH*(xSol - ZOH),
-    b + alphaL*(xSol - ZOH)
-  )
-  DTG = (10^GTD)^-1
-  
-  ##Mgas = muGal * Mhydrogen
-  ## DTG = Mdust / Mgas
-  ## DTH = Mdust / Mhydrogen = Mdust / (Mgas / muGal) = DTG * muGal = DTG * (1 / (1 - Ysol - Zgal))
-  muGal = 1 / (1 - 0.270 - Z)
-  # muGal = (1-Z) / (1 + (4/3))
-  DTH = DTG*muGal
-  if(doDTG){
-    return(DTG)
-  }else{
-    return(DTH)
+  registerDoParallel(cores = cores)
+  astro = foreach(jj = 1:dim(toppost)[1], .combine = rbind) %dopar% {
+    if(jj %% 100 == 0){
+      message("Sample: ", jj)
+    }
+    if(newDust){
+      ## Use the most up to date dust stuff from D'Silva+26 otherwise use defaults used in the fit and stored in Data
+      Data$Dale_M2l_func = function(alpha_SF){
+        Dale_M2L_variableDTH_func(alpha_SF = alpha_SF, qPAH_VSG = .shivaei24_qPAHZ(10^toppost[jj, 'Zfinal'])) * (0.0073/.RR14_BPL(10^toppost[jj, 'Zfinal']))
+      }
+    }
+    
+    samp = ProSpectSEDlike(parm = unlist(toppost[jj, 1:nparm]), Data = Data)
+    
+    df = c(
+      "StellarMass" = .stellar_mass(out = samp),
+      "SFR10" = .SFR10(out = samp),
+      "SFR100" = samp$SEDout$Stars$SFRburst,
+      "UV1500" = .UVLum1500(out = samp),
+      "UV1500AGN" = .UVLumAGN1500(out = samp),
+      "DustLumBirth" = as.numeric(samp$SEDout$dustlum['birth']),
+      "DustLumScreen" = as.numeric(samp$SEDout$dustlum['screen']),
+      "DustLumTotal" = as.numeric(samp$SEDout$dustlum['total']),
+      "DustMassBirth" = as.numeric(samp$SEDout$dustmass['birth']),
+      "DustMassScreen" = as.numeric(samp$SEDout$dustmass['screen']),
+      "DustMassTotal" = as.numeric(samp$SEDout$dustmass['total']),
+      "NgasMassBirth" = as.numeric(samp$SEDout$dustmass['birth']) / .RR14_BPL(as.numeric(10^toppost[jj, 'Zfinal']), doDTG = TRUE),
+      "NgasMassScreen" = as.numeric(samp$SEDout$dustmass['screen']) / .RR14_BPL(as.numeric(10^toppost[jj, 'Zfinal']), doDTG = TRUE),
+      "NgasMassTotal" = as.numeric(samp$SEDout$dustmass['total']) / .RR14_BPL(as.numeric(10^toppost[jj, 'Zfinal']), doDTG = TRUE),
+      "LP" = samp$LP
+    )
+    extra_parm = samp$parm 
+    extra_parm[samp$Data$logged] = 10^extra_parm[samp$Data$logged]
+    c(extra_parm, df)
   }
+  stopImplicitCluster()
+  
+  astro_quantiles = colQuantiles(
+    as.matrix(astro), probs = c(0.5, 0.16, 0.84)
+  )
+  params = rownames(astro_quantiles)
+  
+  summary_dt = list(
+    astro_quantiles[, "50%"],
+    astro_quantiles[, "16%"],
+    astro_quantiles[, "84%"],
+    astro_quantiles[, "50%"] - astro_quantiles[, "16%"],  # lower uncertainty
+    astro_quantiles[, "84%"] - astro_quantiles[, "50%"]   # upper uncertainty
+  )
+  
+  Qnames = c("Q50", "Q16", "Q84", "_lo", "_hi")
+  for (x in seq_along(summary_dt)) {
+    names(summary_dt[[x]]) = paste0(names(summary_dt[[x]]), Qnames[x])
+  }
+  
+  if(specz){
+    summary_dt_nice = as.data.frame(t(c("z" = Data$arglist$z, unlist(summary_dt))))
+  }else{
+    summary_dt_nice = as.data.frame(t(c(unlist(summary_dt))))
+  }
+  
+  returnDF = list(
+    "summary" = summary_dt_nice,
+    "Posterior" = astro
+  )
+  
+  return(returnDF)
 }
-
-# shivaei24 = fread("~/Documents/DustMassDensity/data/shivaeqPAHZ.csv")
-shivaei24 = data.frame(
-  "OH" = c(7.8741935483871, 7.99354838709677, 8.09516129032258, 8.24838709677419, 8.39354838709678, 8.57903225806452, 8.83064516129032),
-  "q" = c(1.04568527918782, 1.01522842639594, 1.01522842639594, 2.20304568527919, 3.39086294416244, 3.39086294416244, 3.3756345177665) 
-)
-shivaei24_fit = approxfun(
-  shivaei24$OH,
-  shivaei24$q,
-  rule = 2
-)
-.shivaei24_qPAHZ = function(Z){
-  xSol = 8.69
-  ZOH = log10(Z / 0.014) + xSol
-
-  ff = c(shivaei24_fit(ZOH)) * 0.01
-  ff[ZOH >= 8.4] =  0.035
-  ff[ZOH < 8.1] =  0.01
-  return(ff)
-}
-# save(.shivaei24_qPAHZ, file = "~/Documents/ProSpectStuff/shivaei24_qpAHZ.rda")
-# load("~/Documents/ProSpectStuff/shivaei24_qpAHZ.rda")
