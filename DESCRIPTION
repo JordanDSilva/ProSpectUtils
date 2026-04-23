@@ -1,0 +1,12 @@
+Package: ProSpectUtils
+Title: Utilities to work with stuff from ProSpect
+Version: 0.0.1
+Authors@R: 
+    person("Jordan", "D'Silva", , "jordanacc001@gmail.com", role = c("aut", "cre"))
+Description: Helpful functions to extract meaningful astrophysical quantities from ProSpect 
+License: LGPL-3
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Depends: R (>= 4.0.0), ProSpectData (>= 1.1.0), ProSpect (>= 1.9.10)
+Imports: foreach, doParallel, matrixStats, data.table, celestial, ProSpect, ProSpectData, pracma
