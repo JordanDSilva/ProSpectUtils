@@ -403,13 +403,16 @@ fitSEDRest = function(out, doAGN = TRUE, doDust = TRUE){
 #' @param specz Whether the fitted galaxy had a spectroscopy redshift 
 #' in which case only the specz is added to the table and not any uncertainty
 #' ranges, boolean
+#' @param user_func Extra function that takes in ProSpect SED/bestfit object and
+#' returns named vector of quantities, function
+#' @param Npost Number posterior samples to use from the first one, numeric
 #' @param cores Number of cores to use to create posterior samples, integer
 #' @return List of summary statistics and the full astrophysics posterior chain
 #' @export
 #' @importFrom foreach foreach %dopar%
 #' @importFrom celestial cosdistUniAgeAtz
 #' @importFrom pracma erf
-calc_astro = function(bestfit, highout, newDust = TRUE, specz = FALSE, cores = 1){
+calc_astro = function(bestfit, highout, newDust = TRUE, specz = FALSE, user_func = function(x){NULL}, Npost = NULL, cores = 1){
   ## provide a prospect and highlander fit RDS
   ## must have all of the speclib, AGN and Dale templates included in Data 
   
@@ -425,8 +428,12 @@ calc_astro = function(bestfit, highout, newDust = TRUE, specz = FALSE, cores = 1
   toppost = post[which(post$LP > chisq_cut),]
   toppost$LP <- NULL
   
+  if(is.null(Npost)){
+    Npost = dim(toppost)[1]
+  }
+  
   doParallel::registerDoParallel(cores = cores)
-  astro = foreach::foreach(jj = 1:dim(toppost)[1], .combine = rbind) %dopar% {
+  astro = foreach::foreach(jj = 1:Npost, .combine = rbind) %dopar% {
     if(jj %% 100 == 0){
       message("Sample: ", jj)
     }
@@ -454,7 +461,8 @@ calc_astro = function(bestfit, highout, newDust = TRUE, specz = FALSE, cores = 1
       "NgasMassBirth" = as.numeric(samp$SEDout$dustmass['birth']) / RR14_BPL(as.numeric(10^toppost[jj, 'Zfinal']), doDTG = TRUE),
       "NgasMassScreen" = as.numeric(samp$SEDout$dustmass['screen']) / RR14_BPL(as.numeric(10^toppost[jj, 'Zfinal']), doDTG = TRUE),
       "NgasMassTotal" = as.numeric(samp$SEDout$dustmass['total']) / RR14_BPL(as.numeric(10^toppost[jj, 'Zfinal']), doDTG = TRUE),
-      "LP" = samp$LP
+      "LP" = samp$LP, 
+      user_func(samp)
     )
     extra_parm = samp$parm 
     extra_parm[samp$Data$logged] = 10^extra_parm[samp$Data$logged]
