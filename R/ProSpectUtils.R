@@ -403,13 +403,16 @@ fitSEDRest = function(out, doAGN = TRUE, doDust = TRUE){
 #' @param specz Whether the fitted galaxy had a spectroscopy redshift 
 #' in which case only the specz is added to the table and not any uncertainty
 #' ranges, boolean
+#' @param user_func Extra function that takes in ProSpect SED/bestfit object and
+#' returns named vector of quantities, function
+#' @param Npost Number posterior samples to use from the first one, numeric
 #' @param cores Number of cores to use to create posterior samples, integer
 #' @return List of summary statistics and the full astrophysics posterior chain
 #' @export
 #' @importFrom foreach foreach %dopar%
 #' @importFrom celestial cosdistUniAgeAtz
 #' @importFrom pracma erf
-calc_astro = function(bestfit, highout, newDust = TRUE, specz = FALSE, cores = 1){
+calc_astro = function(bestfit, highout, newDust = TRUE, specz = FALSE, user_func = function(x){NULL}, Npost = NULL, cores = 1){
   ## provide a prospect and highlander fit RDS
   ## must have all of the speclib, AGN and Dale templates included in Data 
   
@@ -425,8 +428,12 @@ calc_astro = function(bestfit, highout, newDust = TRUE, specz = FALSE, cores = 1
   toppost = post[which(post$LP > chisq_cut),]
   toppost$LP <- NULL
   
+  if(is.null(Npost)){
+    Npost = dim(toppost)[1]
+  }
+  
   doParallel::registerDoParallel(cores = cores)
-  astro = foreach::foreach(jj = 1:dim(toppost)[1], .combine = rbind) %dopar% {
+  astro = foreach::foreach(jj = 1:Npost, .combine = rbind) %dopar% {
     if(jj %% 100 == 0){
       message("Sample: ", jj)
     }
@@ -454,7 +461,8 @@ calc_astro = function(bestfit, highout, newDust = TRUE, specz = FALSE, cores = 1
       "NgasMassBirth" = as.numeric(samp$SEDout$dustmass['birth']) / RR14_BPL(as.numeric(10^toppost[jj, 'Zfinal']), doDTG = TRUE),
       "NgasMassScreen" = as.numeric(samp$SEDout$dustmass['screen']) / RR14_BPL(as.numeric(10^toppost[jj, 'Zfinal']), doDTG = TRUE),
       "NgasMassTotal" = as.numeric(samp$SEDout$dustmass['total']) / RR14_BPL(as.numeric(10^toppost[jj, 'Zfinal']), doDTG = TRUE),
-      "LP" = samp$LP
+      "LP" = samp$LP, 
+      user_func(samp)
     )
     extra_parm = samp$parm 
     extra_parm[samp$Data$logged] = 10^extra_parm[samp$Data$logged]
@@ -462,12 +470,41 @@ calc_astro = function(bestfit, highout, newDust = TRUE, specz = FALSE, cores = 1
   }
   doParallel::stopImplicitCluster()
   
+  if(newDust){
+    ## Use the most up to date dust stuff from D'Silva+26 otherwise use defaults used in the fit and stored in Data
+    bestfit$Data$Dale_M2L_func = function(alpha_SF){
+      ProSpect::Dale_M2L_variableDTH_func(alpha_SF = alpha_SF, qPAH_VSG = shivaei24_qPAHZ(10^toppost[jj, 'Zfinal'])) * (0.0073/RR14_BPL(10^toppost[jj, 'Zfinal']))
+    }
+  }
+  extra_parm = bestfit$parm 
+  extra_parm[bestfit$Data$logged] = 10^extra_parm[bestfit$Data$logged]
+  df_best = c(
+    extra_parm,
+    "StellarMass" = stellar_mass(out = bestfit),
+    "SFR10" = SFR10(out = bestfit),
+    "SFR100" = bestfit$SEDout$Stars$SFRburst,
+    "UV1500" = UVLum1500(out = bestfit),
+    "UV1500AGN" = UVLumAGN1500(out = bestfit),
+    "DustLumBirth" = as.numeric(bestfit$SEDout$dustlum['birth']),
+    "DustLumScreen" = as.numeric(bestfit$SEDout$dustlum['screen']),
+    "DustLumTotal" = as.numeric(bestfit$SEDout$dustlum['total']),
+    "DustMassBirth" = as.numeric(bestfit$SEDout$dustmass['birth']),
+    "DustMassScreen" = as.numeric(bestfit$SEDout$dustmass['screen']),
+    "DustMassTotal" = as.numeric(bestfit$SEDout$dustmass['total']),
+    "NgasMassBirth" = as.numeric(bestfit$SEDout$dustmass['birth']) / RR14_BPL(as.numeric(10^bestfit$parm['Zfinal']), doDTG = TRUE),
+    "NgasMassScreen" = as.numeric(bestfit$SEDout$dustmass['screen']) / RR14_BPL(as.numeric(10^bestfit$parm['Zfinal']), doDTG = TRUE),
+    "NgasMassTotal" = as.numeric(bestfit$SEDout$dustmass['total']) / RR14_BPL(as.numeric(10^bestfit$parm['Zfinal']), doDTG = TRUE),
+    "LP" = bestfit$LP, 
+    user_func(bestfit$LP)
+  )
+  
   astro_quantiles = matrixStats::colQuantiles(
     as.matrix(astro), probs = c(0.5, 0.16, 0.84)
   )
   params = rownames(astro_quantiles)
   
   summary_dt = list(
+    df_best,
     astro_quantiles[, "50%"],
     astro_quantiles[, "16%"],
     astro_quantiles[, "84%"],
@@ -475,7 +512,7 @@ calc_astro = function(bestfit, highout, newDust = TRUE, specz = FALSE, cores = 1
     astro_quantiles[, "84%"] - astro_quantiles[, "50%"]   # upper uncertainty
   )
   
-  Qnames = c("Q50", "Q16", "Q84", "_lo", "_hi")
+  Qnames = c("Best", "Q50", "Q16", "Q84", "_lo", "_hi")
   for (x in seq_along(summary_dt)) {
     names(summary_dt[[x]]) = paste0(names(summary_dt[[x]]), Qnames[x])
   }

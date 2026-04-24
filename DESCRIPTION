@@ -1,6 +1,6 @@
 Package: ProSpectUtils
 Title: Utilities to work with stuff from ProSpect
-Version: 0.0.1
+Version: 0.0.3
 Authors@R: 
     person("Jordan", "D'Silva", , "jordanacc001@gmail.com", role = c("aut", "cre"))
 Description: Helpful functions to extract meaningful astrophysical quantities from ProSpect 

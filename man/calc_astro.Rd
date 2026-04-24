@@ -4,7 +4,17 @@
 \alias{calc_astro}
 \title{Calculate astrophysical quantities}
 \usage{
-calc_astro(bestfit, highout, newDust = TRUE, specz = FALSE, cores = 1)
+calc_astro(
+  bestfit,
+  highout,
+  newDust = TRUE,
+  specz = FALSE,
+  user_func = function(x) {
+     NULL
+ },
+  Npost = NULL,
+  cores = 1
+)
 }
 \arguments{
 \item{bestfit}{ProSpect SED/bestfit object. Requires all the relevant
@@ -18,6 +28,11 @@ from RR14 and Shivaei+24, boolean}
 \item{specz}{Whether the fitted galaxy had a spectroscopy redshift
 in which case only the specz is added to the table and not any uncertainty
 ranges, boolean}
+
+\item{user_func}{Extra function that takes in ProSpect SED/bestfit object and
+returns named vector of quantities, function}
+
+\item{Npost}{Number posterior samples to use from the first one, numeric}
 
 \item{cores}{Number of cores to use to create posterior samples, integer}
 }
