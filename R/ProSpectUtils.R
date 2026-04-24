@@ -432,7 +432,7 @@ calc_astro = function(bestfit, highout, newDust = TRUE, specz = FALSE, cores = 1
     }
     if(newDust){
       ## Use the most up to date dust stuff from D'Silva+26 otherwise use defaults used in the fit and stored in Data
-      Data$Dale_M2l_func = function(alpha_SF){
+      Data$Dale_M2L_func = function(alpha_SF){
         ProSpect::Dale_M2L_variableDTH_func(alpha_SF = alpha_SF, qPAH_VSG = shivaei24_qPAHZ(10^toppost[jj, 'Zfinal'])) * (0.0073/RR14_BPL(10^toppost[jj, 'Zfinal']))
       }
     }
