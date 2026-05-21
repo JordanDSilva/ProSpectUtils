@@ -2,7 +2,7 @@
 
 #' Dust mass stuff from D'Silva+26
 #'
-#' This function recomputes dust masses 
+#' This function recomputes dust masses
 #' using the wavelength dependent DTH from D'Silva+26
 #'
 #' @param out ProSpect bestfit object, class ProSpectSED
@@ -10,37 +10,37 @@
 #' @return The updated dust mass, numeric
 #' @export
 New_DustMass_vDTH = function(out, qPAH_VSG = 0.035){
-  
-  new_dust = out$SEDout$dustlum["birth"]/ProSpect::Dale_M2L_variableDTH_func(out$parm["alpha_SF_birth"], qPAH_VSG = qPAH_VSG) + 
+
+  new_dust = out$SEDout$dustlum["birth"]/ProSpect::Dale_M2L_variableDTH_func(out$parm["alpha_SF_birth"], qPAH_VSG = qPAH_VSG) +
     out$SEDout$dustlum["screen"]/ProSpect::Dale_M2L_variableDTH_func(out$parm["alpha_SF_screen"], qPAH_VSG = qPAH_VSG)
-  
+
   return(as.numeric(new_dust))
 }
 
 #' Remy-Ruyer+14 metallicity dependent DTH/DTG
 #'
 #' This function produces the linear relation
-#' between metallicity and the DTH/DTG ratios 
+#' between metallicity and the DTH/DTG ratios
 #' from Remy-Ruyer+14
 #'
 #' @param Z metallicity NOT in solar units, numeric
 #' @param doDTG, Whether to compute DTH or DTG which are related by the, boolean
 #' mean atomic weight
-#' @return DTH/DTG ratios which should be compared to 
+#' @return DTH/DTG ratios which should be compared to
 #' DTH=0.0073 the default in ProSpect, numeric
 #' @export
 RR14_BPL = function(Z, doDTG = FALSE){
-  
+
   ## Remy Ruyer+14 using metallicity dependent XCO
   ## x = 12 + log(O/H)
   ## xSol = 12 + log(O/H)Sol
-  
+
   ## Z/Zsol = (O/H)/(O/HSol)
   ## log(Z) - log(Zsol) = log(O/H) - log(O/HSol)
   ## log(Z)+12 - log(Zsol)-12 = log(O/H)+12 - log(O/Hsol)-12
   ## log(Z) - log(Zsol) = x - xSol
   ## log(Z/0.014) + xSol = log(O/H) + 12
-  
+
   a = 2.21
   alphaH = 1.00
   b = 0.96
@@ -49,14 +49,14 @@ RR14_BPL = function(Z, doDTG = FALSE){
 
   xSol = 8.69
   ZOH = log10(Z / 0.014) + xSol
-  
+
   GTD = ifelse(
     ZOH > xt,
     a + alphaH*(xSol - ZOH),
     b + alphaL*(xSol - ZOH)
   )
   DTG = (10^GTD)^-1
-  
+
   ##Mgas = muGal * Mhydrogen
   ## DTG = Mdust / Mgas
   ## DTH = Mdust / Mhydrogen = Mdust / (Mgas / muGal) = DTG * muGal = DTG * (1 / (1 - Ysol - Zgal))
@@ -72,31 +72,31 @@ RR14_BPL = function(Z, doDTG = FALSE){
 #' Shivaei+24 metallicity dependent qPAH
 #'
 #' This function produces the piecewise relation
-#' between metallicity and the qPAH  
+#' between metallicity and the qPAH
 #' from Shivaei+24
 #'
 #' @param Z metallicity NOT in solar units, numeric
-#' @return qPAH, mass fraction in very small grains and PAH 
+#' @return qPAH, mass fraction in very small grains and PAH
 #' @export
 shivaei24_qPAHZ = function(Z){
   ## interpolate Shivaei+24 Z-qPAH
   xSol = 8.69
   ZOH = log10(Z / 0.014) + xSol
-  
+
   ff = c(
     approx(
-      c(7.8741935483871, 7.99354838709677, 8.09516129032258, 8.24838709677419, 8.39354838709678, 8.57903225806452, 8.83064516129032), 
-      c(1.04568527918782, 1.01522842639594, 1.01522842639594, 2.20304568527919, 3.39086294416244, 3.39086294416244, 3.3756345177665), 
+      c(7.8741935483871, 7.99354838709677, 8.09516129032258, 8.24838709677419, 8.39354838709678, 8.57903225806452, 8.83064516129032),
+      c(1.04568527918782, 1.01522842639594, 1.01522842639594, 2.20304568527919, 3.39086294416244, 3.39086294416244, 3.3756345177665),
       xout = ZOH,
       rule = 2
-    )$y 
+    )$y
   ) * 0.01
   ff[ZOH >= 8.4] =  0.035
   ff[ZOH < 8.1] =  0.01
   return(ff)
 }
 
-## Now get some statistics and astrophysics 
+## Now get some statistics and astrophysics
 
 #' Top-hat filter on 1500 Ang
 #'
@@ -111,6 +111,11 @@ UV_tophat = function(wave){
   throughput[wave >= (1500 - 50) & wave <= (1500 + 50)] = 1L
   return(throughput)
 }
+Halpha_tophat = function(wave){
+  throughput = rep(0L, length(wave))
+  throughput[wave >= (6562.79 - 5) & wave <= (6562.79 + 5)] = 1L
+  return(throughput)
+}
 
 #' UV1500 luminosities
 #'
@@ -119,17 +124,14 @@ UV_tophat = function(wave){
 #' @return Rest-frame UV1500 luminosity in MAB (10pc)
 #' @export
 UVLum1500 = function(out){
-  out$Data$fit = "check"
-  
   UV1500 = ProSpect::photom_lum(
     wave = out$SEDout$FinalLum$wave,
     lum = out$SEDout$FinalLum$lum,
-    z = 0.0, 
+    z = 0.0,
     LumDist_Mpc = out$Data$arglist$LumDist_Mpc,
     ref = out$Data$arglist$ref,
     filters = list(UV_tophat)
   )
-  
   return(UV1500)
 }
 
@@ -140,21 +142,119 @@ UVLum1500 = function(out){
 #' @return Rest-frame UV1500 luminosity in MAB (10pc)
 #' @export
 UVLumAGN1500 = function(out){
-  out$Data$fit = "check"
-  
   if(is.null(out$SEDout$AGN)){
     UV1500 = NA
   }else{
     UV1500 = ProSpect::photom_lum(
       wave = out$SEDout$AGN$wave,
       lum = out$SEDout$AGN$lum,
-      z = 0.0, 
+      z = 0.0,
       LumDist_Mpc = out$Data$arglist$LumDist_Mpc,
       ref = out$Data$arglist$ref,
       filters = list(UV_tophat)
     )
   }
   return(UV1500)
+}
+
+#' Nion LyC emissivities
+#'
+#' Calculates the ionizing photon production rate by directly integrating the
+#' Lyman continuum (LyC) emission below 912 Angstrom from a ProSpect SED object.
+#' This will be zero if the escape fraction is 0.
+#' Better to remake the ProSpect SED with all the parameters the same but
+#' manually make escape fraction = 0.
+#'
+#' Nion LyC emissivities
+#' @param out ProSpect SED/bestfit object
+#' @return Nion LyC emissivities in photons/s
+#' @export
+NionEmissivity = function(out){
+  # must have fesc = 1 to work
+
+  wave_ion = 911.75 # Ang
+  plancksConstant = 6.62607004e-34 # J/s
+  speedOfLight = 299792458 # m/s
+  Lsol2Watts = 3.828e+26
+
+  wave = out$SEDout$FinalLum$wave
+  wave_idx = wave <= wave_ion
+  Nion_vec = out$SEDout$FinalLum$lum[wave_idx] * Lsol2Watts / ( (plancksConstant * speedOfLight) / (wave[wave_idx] * 1e-10) )
+  Nion = sum(Nion_vec * c(0, diff(wave[wave_idx])))
+  return(Nion)
+}
+
+#' Nion LyC emissivities for AGN only
+#'
+#' Nion LyC emissivities for AGN only
+#' @param out ProSpect SED/bestfit object
+#' @return Nion LyC emissivities in photons/s
+#' @export
+NionEmissivityAGN = function(out){
+  wave_ion = 911.75 # Ang
+  plancksConstant = 6.62607004e-34 # J/s
+  speedOfLight = 299792458 # m/s
+  Lsol2Watts = 3.828e+26
+
+  wave_AGN = out$SEDout$AGN$wave
+  wave_idx_AGN = wave_AGN <= wave_ion
+  Nion_vec_AGN = out$SEDout$AGN$lum[wave_idx_AGN] * Lsol2Watts / ( (plancksConstant * speedOfLight) / (wave_AGN[wave_idx_AGN] * 1e-10) )
+  Nion_AGN = sum(Nion_vec_AGN * c(0, diff(wave_AGN[wave_idx_AGN])))
+  Nion = Nion_AGN
+
+  return(Nion)
+}
+
+#' Ionising efficiency
+#'
+#' Calculates the ionizing photon production rate by directly integrating the
+#' Lyman continuum (LyC) emission below 912 Angstrom from a ProSpect SED object.
+#' This will be zero if the escape fraction is 0.
+#' Better to remake the ProSpect SED with all the parameters the same but
+#' manually make escape fraction = 0.
+#'
+#' Ionising efficiency
+#' @param out ProSpect SED/bestfit object
+#' @return Ionising efficiency in Hz/erg
+#' @export
+ionisingEfficiency = function(out){
+  Nion = NionEmissivity(out)
+
+  UV1500 = ProSpect::photom_lum(
+    wave = out$SEDout$FinalLum$wave,
+    lum = out$SEDout$FinalLum$lum,
+    z = 0.0,
+    LumDist_Mpc = out$Data$arglist$LumDist_Mpc,
+    ref = out$Data$arglist$ref,
+    filters = list(UV_tophat),
+    outtype = "CGS"
+  ) * 4*pi*(10 * 3.086e18)^2
+
+  xi_ion = Nion / UV1500
+  return(xi_ion)
+}
+
+#' Ionising efficiency for AGN only
+#'
+#' Ionising efficiency for AGN only
+#' @param out ProSpect SED/bestfit object
+#' @return Ionising efficiency in Hz/erg
+#' @export
+ionisingEfficiencyAGN = function(out){
+  Nion_AGN = NionEmissivityAGN(out)
+
+  UV1500_AGN = ProSpect::photom_lum(
+    wave = out$SEDout$AGN$wave,
+    lum = out$SEDout$AGN$lum,
+    z = 0.0,
+    LumDist_Mpc = out$Data$arglist$LumDist_Mpc,
+    ref = out$Data$arglist$ref,
+    filters = list(UV_tophat),
+    outtype = "CGS"
+  ) * 4*pi*(10 * 3.086e18)^2
+
+  xi_ion = Nion_AGN / UV1500_AGN
+  return(xi_ion)
 }
 
 #' Stellar masses
@@ -164,14 +264,14 @@ UVLumAGN1500 = function(out){
 #' @return Stellar mass in solar masses
 #' @export
 stellar_mass = function(out){
-  
+
   out$Data$fit = "check"
-  
+
   parm = out$parm
   parm[out$Data$logged] = 10^parm[out$Data$logged]
-  
+
   SMstar = ParmOff::ParmOff(
-    .func = SMstarfunc, #the function we want to run
+    .func = ProSpect::SMstarfunc, #the function we want to run
     .args = c(parm, out$Data$arglist), #the superset of potential matching parameters
     massfunc = out$Data$arglist$massfunc,
     speclib = out$Data$speclib,
@@ -187,19 +287,19 @@ stellar_mass = function(out){
 #' @return SFR averaged over 10Myr in solar masses per year
 #' @export
 SFR10 = function(out){
-  
+
   out$Data$fit = "check"
-  
+
   parm = out$parm
   parm[out$Data$logged] = 10^parm[out$Data$logged]
-  
+
   mass_func_args_idx = out$Data$parm.names %in% names(formals(out$Data$arglist$massfunc))
   massfunc_args = c(parm[mass_func_args_idx], "magemax" = out$Data$arglist$magemax)
-  
+
   sfr10 = do.call('integrate', c(list(
     f = out$Data$arglist$massfunc, lower = 0, upper = 1e7
   ), massfunc_args))$value / 1e7
-  
+
   return(sfr10)
 }
 
@@ -212,9 +312,9 @@ SFR10 = function(out){
 #' @return Data-frame of observed SEDs in Janskys and wavelengths in Ang
 #' @export
 fitSEDObs = function(out, doAGN = TRUE, doDust = TRUE){
-  
+
   waveout = out$Data$waveout
-  
+
   fflux_StarsUnAtten = ProSpect::Lum2Flux(
     out$SEDout$StarsUnAtten$wave,
     out$SEDout$StarsUnAtten$lum,
@@ -225,8 +325,8 @@ fitSEDObs = function(out, doAGN = TRUE, doDust = TRUE){
     LumDist_Mpc = out$Data$arglist$LumDist_Mpc,
     ref = out$Data$arglist$ref
   )
-  fflux_StarsUnAttenJy = ProSpect::CGS2Jansky(convert_wave2freq(fflux_StarsUnAtten$flux, fflux_StarsUnAtten$wave))
-  
+  fflux_StarsUnAttenJy = ProSpect::CGS2Jansky(ProSpect::convert_wave2freq(fflux_StarsUnAtten$flux, fflux_StarsUnAtten$wave))
+
   fflux_StarsAtten = ProSpect::Lum2Flux(
     out$SEDout$StarsAtten$wave,
     out$SEDout$StarsAtten$lum,
@@ -237,8 +337,8 @@ fitSEDObs = function(out, doAGN = TRUE, doDust = TRUE){
     LumDist_Mpc = out$Data$arglist$LumDist_Mpc,
     ref = out$Data$arglist$ref
   )
-  fflux_StarsAttenJy = ProSpect::CGS2Jansky(convert_wave2freq(fflux_StarnAtten$flux, fflux_StarnAtten$wave))
-  
+  fflux_StarsAttenJy = ProSpect::CGS2Jansky(ProSpect::convert_wave2freq(fflux_StarsAtten$flux, fflux_StarsAtten$wave))
+
   if(doAGN){
     fflux_AGN = ProSpect::Lum2Flux(
       out$SEDout$AGN$wave,
@@ -250,7 +350,7 @@ fitSEDObs = function(out, doAGN = TRUE, doDust = TRUE){
       LumDist_Mpc = out$Data$arglist$LumDist_Mpc,
       ref = out$Data$arglist$ref
     )
-    fflux_AGNJy = ProSpect::CGS2Jansky(convert_wave2freq(fflux_AGN$flux, fflux_AGN$wave))
+    fflux_AGNJy = ProSpect::CGS2Jansky(ProSpect::convert_wave2freq(fflux_AGN$flux, fflux_AGN$wave))
   }else{
     fflux_AGN = rep(0, length(waveout))
   }
@@ -265,11 +365,11 @@ fitSEDObs = function(out, doAGN = TRUE, doDust = TRUE){
       LumDist_Mpc = out$Data$arglist$LumDist_Mpc,
       ref = out$Data$arglist$ref
     )
-    fflux_DustJy = ProSpect::CGS2Jansky(convert_wave2freq(fflux_Dust$flux, fflux_Dust$wave))
+    fflux_DustJy = ProSpect::CGS2Jansky(ProSpect::convert_wave2freq(fflux_Dust$flux, fflux_Dust$wave))
   }else{
     fflux_Dust = rep(0, length(waveout))
   }
-  
+
   ffluxStarsUnAttenJy_rebin = ProSpect::specReBin(
     wave = fflux_StarsUnAtten$wave,
     flux = fflux_StarsUnAttenJy,
@@ -311,9 +411,9 @@ fitSEDObs = function(out, doAGN = TRUE, doDust = TRUE){
 #' @return Data-frame of restframe SEDs in Lsol/Ang and wavelengths in Ang
 #' @export
 fitSEDRest = function(out, doAGN = TRUE, doDust = TRUE){
-  
+
   waveout = out$Data$waveout
-  
+
   fflux = ProSpect::Lum2Flux(
     out$SEDout$FinalLum$wave,
     out$SEDout$FinalLum$lum,
@@ -324,8 +424,8 @@ fitSEDRest = function(out, doAGN = TRUE, doDust = TRUE){
     LumDist_Mpc = out$Data$arglist$LumDist_Mpc,
     ref = out$Data$arglist$ref
   )
-  ffluxJy = ProSpect::CGS2Jansky(convert_wave2freq(fflux$flux, fflux$wave))
-  
+  ffluxJy = ProSpect::CGS2Jansky(ProSpect::convert_wave2freq(fflux$flux, fflux$wave))
+
   fflux_StarsUnAtten = ProSpect::Lum2Flux(
     out$SEDout$StarsUnAtten$wave,
     out$SEDout$StarsUnAtten$lum,
@@ -336,9 +436,9 @@ fitSEDRest = function(out, doAGN = TRUE, doDust = TRUE){
     LumDist_Mpc = out$Data$arglist$LumDist_Mpc,
     ref = out$Data$arglist$ref
   )
-  fflux_StarsUnAttenJy = ProSpect::CGS2Jansky(convert_wave2freq(fflux_StarsUnAtten$flux, fflux_StarsUnAtten$wave))
-  
-  fflux_StarnAtten = Lum2Flux(
+  fflux_StarsUnAttenJy = ProSpect::CGS2Jansky(ProSpect::convert_wave2freq(fflux_StarsUnAtten$flux, fflux_StarsUnAtten$wave))
+
+  fflux_StarsAtten = ProSpect::Lum2Flux(
     out$SEDout$StarsAtten$wave,
     out$SEDout$StarsAtten$lum,
     z = out$SEDout$z,
@@ -348,8 +448,8 @@ fitSEDRest = function(out, doAGN = TRUE, doDust = TRUE){
     LumDist_Mpc = out$Data$arglist$LumDist_Mpc,
     ref = out$Data$arglist$ref
   )
-  fflux_StarsAttenJy = ProSpect::CGS2Jansky(convert_wave2freq(fflux_StarnAtten$flux, fflux_StarnAtten$wave))
-  
+  fflux_StarsAttenJy = ProSpect::CGS2Jansky(ProSpect::convert_wave2freq(fflux_StarsAtten$flux, fflux_StarsAtten$wave))
+
   if(doAGN){
     ffluxAGN_rebin = ProSpect::specReBin(
       wave = out$SEDout$AGN$wave,
@@ -368,7 +468,7 @@ fitSEDRest = function(out, doAGN = TRUE, doDust = TRUE){
   }else{
     ffluxDust_rebin = cbind("wave" = waveout, "flux" = rep(0, length(waveout)))
   }
-  
+
   ffluxStarsUnAtten_rebin = ProSpect::specReBin(
     wave = out$SEDout$StarsUnAtten$wave,
     flux = out$SEDout$StarsUnAtten$lum,
@@ -379,7 +479,7 @@ fitSEDRest = function(out, doAGN = TRUE, doDust = TRUE){
     flux = out$SEDout$StarsAtten$lum,
     wavegrid = out$SEDout$FinalFlux$wave
   )
-  
+
   return(
     list(
       "wave" = out$SEDout$FinalLum$wave,
@@ -400,7 +500,7 @@ fitSEDRest = function(out, doAGN = TRUE, doDust = TRUE){
 #' @param highout Highlander fit object with Posterior chains
 #' @param newDust Whether to use metallicity dependent DTH/DTG and qPAH
 #' from RR14 and Shivaei+24, boolean
-#' @param specz Whether the fitted galaxy had a spectroscopy redshift 
+#' @param specz Whether the fitted galaxy had a spectroscopy redshift
 #' in which case only the specz is added to the table and not any uncertainty
 #' ranges, boolean
 #' @param user_func Extra function that takes in ProSpect SED/bestfit object and
@@ -414,24 +514,24 @@ fitSEDRest = function(out, doAGN = TRUE, doDust = TRUE){
 #' @importFrom pracma erf
 calc_astro = function(bestfit, highout, newDust = TRUE, specz = FALSE, user_func = function(x){NULL}, Npost = NULL, cores = 1){
   ## provide a prospect and highlander fit RDS
-  ## must have all of the speclib, AGN and Dale templates included in Data 
-  
+  ## must have all of the speclib, AGN and Dale templates included in Data
+
   Data = bestfit$Data
-  
+
   nparm = length(bestfit$parm)
   post = cbind(highout$LD_last$Posterior1, highout$LD_last$Monitor)
   post = data.table::data.table(post)
   post = post[order(-post$LP),]
-  
+
   ## calculating a chisq cut based on the number of parameters to isolate a 1sigma range (from J. Thorne Thesis Codes on GitHub)
   chisq_cut = max(post$LP) - qchisq(0.68,nparm)/2
   toppost = post[which(post$LP > chisq_cut),]
   toppost$LP <- NULL
-  
+
   if(is.null(Npost)){
     Npost = dim(toppost)[1]
   }
-  
+
   doParallel::registerDoParallel(cores = cores)
   astro = foreach::foreach(jj = 1:Npost, .combine = rbind) %dopar% {
     if(jj %% 100 == 0){
@@ -443,9 +543,9 @@ calc_astro = function(bestfit, highout, newDust = TRUE, specz = FALSE, user_func
         ProSpect::Dale_M2L_variableDTH_func(alpha_SF = alpha_SF, qPAH_VSG = shivaei24_qPAHZ(10^toppost[jj, 'Zfinal'])) * (0.0073/RR14_BPL(10^toppost[jj, 'Zfinal']))
       }
     }
-    
+
     samp = ProSpect::ProSpectSEDlike(parm = unlist(toppost[jj, 1:nparm]), Data = Data)
-    
+
     df = c(
       "StellarMass" = stellar_mass(out = samp),
       "SFR10" = SFR10(out = samp),
@@ -461,22 +561,22 @@ calc_astro = function(bestfit, highout, newDust = TRUE, specz = FALSE, user_func
       "NgasMassBirth" = as.numeric(samp$SEDout$dustmass['birth']) / RR14_BPL(as.numeric(10^toppost[jj, 'Zfinal']), doDTG = TRUE),
       "NgasMassScreen" = as.numeric(samp$SEDout$dustmass['screen']) / RR14_BPL(as.numeric(10^toppost[jj, 'Zfinal']), doDTG = TRUE),
       "NgasMassTotal" = as.numeric(samp$SEDout$dustmass['total']) / RR14_BPL(as.numeric(10^toppost[jj, 'Zfinal']), doDTG = TRUE),
-      "LP" = samp$LP, 
+      "LP" = samp$LP,
       user_func(samp)
     )
-    extra_parm = samp$parm 
+    extra_parm = samp$parm
     extra_parm[samp$Data$logged] = 10^extra_parm[samp$Data$logged]
     c(extra_parm, df)
   }
   doParallel::stopImplicitCluster()
-  
+
   if(newDust){
     ## Use the most up to date dust stuff from D'Silva+26 otherwise use defaults used in the fit and stored in Data
     bestfit$Data$Dale_M2L_func = function(alpha_SF){
       ProSpect::Dale_M2L_variableDTH_func(alpha_SF = alpha_SF, qPAH_VSG = shivaei24_qPAHZ(10^toppost[jj, 'Zfinal'])) * (0.0073/RR14_BPL(10^toppost[jj, 'Zfinal']))
     }
   }
-  extra_parm = bestfit$parm 
+  extra_parm = bestfit$parm
   extra_parm[bestfit$Data$logged] = 10^extra_parm[bestfit$Data$logged]
   df_best = c(
     extra_parm,
@@ -494,15 +594,15 @@ calc_astro = function(bestfit, highout, newDust = TRUE, specz = FALSE, user_func
     "NgasMassBirth" = as.numeric(bestfit$SEDout$dustmass['birth']) / RR14_BPL(as.numeric(10^bestfit$parm['Zfinal']), doDTG = TRUE),
     "NgasMassScreen" = as.numeric(bestfit$SEDout$dustmass['screen']) / RR14_BPL(as.numeric(10^bestfit$parm['Zfinal']), doDTG = TRUE),
     "NgasMassTotal" = as.numeric(bestfit$SEDout$dustmass['total']) / RR14_BPL(as.numeric(10^bestfit$parm['Zfinal']), doDTG = TRUE),
-    "LP" = bestfit$LP, 
+    "LP" = bestfit$LP,
     user_func(bestfit$LP)
   )
-  
+
   astro_quantiles = matrixStats::colQuantiles(
     as.matrix(astro), probs = c(0.5, 0.16, 0.84)
   )
   params = rownames(astro_quantiles)
-  
+
   summary_dt = list(
     df_best,
     astro_quantiles[, "50%"],
@@ -511,22 +611,34 @@ calc_astro = function(bestfit, highout, newDust = TRUE, specz = FALSE, user_func
     astro_quantiles[, "50%"] - astro_quantiles[, "16%"],  # lower uncertainty
     astro_quantiles[, "84%"] - astro_quantiles[, "50%"]   # upper uncertainty
   )
-  
+
   Qnames = c("Best", "Q50", "Q16", "Q84", "_lo", "_hi")
   for (x in seq_along(summary_dt)) {
     names(summary_dt[[x]]) = paste0(names(summary_dt[[x]]), Qnames[x])
   }
-  
+
   if(specz){
     summary_dt_nice = as.data.frame(t(c("z" = Data$arglist$z, unlist(summary_dt))))
   }else{
     summary_dt_nice = as.data.frame(t(c(unlist(summary_dt))))
   }
-  
+
   returnDF = list(
     "summary" = summary_dt_nice,
     "Posterior" = astro
   )
-  
+
   return(returnDF)
+}
+
+#' unlog_parm
+#'
+#' Get the unlogged parameters
+#' @param out ProSpect SED/bestfit object
+#' @return SFR averaged over 10Myr in solar masses per year
+#' @export
+unlog_parm = function(out){
+  parm = out$parm
+  parm[out$Data$logged] = 10^parm[out$Data$logged]
+  return(parm)
 }
