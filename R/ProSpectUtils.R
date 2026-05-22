@@ -111,11 +111,6 @@ UV_tophat = function(wave){
   throughput[wave >= (1500 - 50) & wave <= (1500 + 50)] = 1L
   return(throughput)
 }
-Halpha_tophat = function(wave){
-  throughput = rep(0L, length(wave))
-  throughput[wave >= (6562.79 - 5) & wave <= (6562.79 + 5)] = 1L
-  return(throughput)
-}
 
 #' UV1500 luminosities
 #'
@@ -595,7 +590,7 @@ calc_astro = function(bestfit, highout, newDust = TRUE, specz = FALSE, user_func
     "NgasMassScreen" = as.numeric(bestfit$SEDout$dustmass['screen']) / RR14_BPL(as.numeric(10^bestfit$parm['Zfinal']), doDTG = TRUE),
     "NgasMassTotal" = as.numeric(bestfit$SEDout$dustmass['total']) / RR14_BPL(as.numeric(10^bestfit$parm['Zfinal']), doDTG = TRUE),
     "LP" = bestfit$LP,
-    user_func(bestfit$LP)
+    user_func(bestfit)
   )
 
   astro_quantiles = matrixStats::colQuantiles(
