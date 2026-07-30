@@ -288,8 +288,18 @@ SFR10 = function(out){
   parm = out$parm
   parm[out$Data$logged] = 10^parm[out$Data$logged]
 
-  mass_func_args_idx = out$Data$parm.names %in% names(formals(out$Data$arglist$massfunc))
-  massfunc_args = c(parm[mass_func_args_idx], "magemax" = out$Data$arglist$magemax)
+  fixed = unlist(sapply(out$Data$arglist, function(x)if(is.numeric(x)){x}))
+
+  mass_func_args_fit_idx = out$Data$parm.names %in% names(formals(out$Data$arglist$massfunc))
+  massfunc_args_fit = parm[mass_func_args_fit_idx]
+
+  mass_func_args_fixed_idx = names(fixed) %in% names(formals(out$Data$arglist$massfunc))
+  massfunc_args_fixed = fixed[mass_func_args_fixed_idx]
+
+  massfunc_args = c(
+    massfunc_args_fit,
+    massfunc_args_fixed
+  )
 
   sfr10 = do.call('integrate', c(list(
     f = out$Data$arglist$massfunc, lower = 0, upper = 1e7
@@ -523,6 +533,24 @@ calc_astro = function(bestfit, highout, newDust = TRUE, specz = FALSE, user_func
   toppost = post[which(post$LP > chisq_cut),]
   toppost$LP <- NULL
 
+  is_metallicity = !is.null(grepl("Z", Data$parm.names))
+  if(is_metallicity){
+    metallicity = as.matrix(toppost)[, which(grepl("Z", Data$parm.names))]
+    metallicity_best = bestfit$parm[grepl("Z", Data$parm.names)]
+
+    if(Data$logged[grepl("Z", Data$parm.names)]){
+      metallicity = as.numeric(10^metallicity)
+      metallicity_best = as.numeric(10^metallicity_best)
+    }
+  }else{
+    metallicity = rep(Data$arglist$Z, nrow(toppost))
+    metallicity_best = Data$arglist$Z
+    if(is.null(metallicity)){
+      metallicity = rep(0.02, nrow(toppost))
+      metallicity_best = 0.02
+    }
+  }
+
   if(is.null(Npost)){
     Npost = dim(toppost)[1]
   }
@@ -532,10 +560,10 @@ calc_astro = function(bestfit, highout, newDust = TRUE, specz = FALSE, user_func
     if(jj %% 100 == 0){
       message("Sample: ", jj)
     }
-    if(newDust){
+    if(newDust & is_metallicity){
       ## Use the most up to date dust stuff from D'Silva+26 otherwise use defaults used in the fit and stored in Data
       Data$Dale_M2L_func = function(alpha_SF){
-        ProSpect::Dale_M2L_variableDTH_func(alpha_SF = alpha_SF, qPAH_VSG = shivaei24_qPAHZ(10^toppost[jj, 'Zfinal'])) * (0.0073/RR14_BPL(10^toppost[jj, 'Zfinal']))
+        ProSpect::Dale_M2L_variableDTH_func(alpha_SF = alpha_SF, qPAH_VSG = shivaei24_qPAHZ(metallicity[jj])) * (0.0073/RR14_BPL(metallicity[jj]))
       }
     }
 
@@ -553,9 +581,9 @@ calc_astro = function(bestfit, highout, newDust = TRUE, specz = FALSE, user_func
       "DustMassBirth" = as.numeric(samp$SEDout$dustmass['birth']),
       "DustMassScreen" = as.numeric(samp$SEDout$dustmass['screen']),
       "DustMassTotal" = as.numeric(samp$SEDout$dustmass['total']),
-      "NgasMassBirth" = as.numeric(samp$SEDout$dustmass['birth']) / RR14_BPL(as.numeric(10^toppost[jj, 'Zfinal']), doDTG = TRUE),
-      "NgasMassScreen" = as.numeric(samp$SEDout$dustmass['screen']) / RR14_BPL(as.numeric(10^toppost[jj, 'Zfinal']), doDTG = TRUE),
-      "NgasMassTotal" = as.numeric(samp$SEDout$dustmass['total']) / RR14_BPL(as.numeric(10^toppost[jj, 'Zfinal']), doDTG = TRUE),
+      "NgasMassBirth" = as.numeric(samp$SEDout$dustmass['birth']) / RR14_BPL(metallicity[jj], doDTG = TRUE),
+      "NgasMassScreen" = as.numeric(samp$SEDout$dustmass['screen']) / RR14_BPL(metallicity[jj], doDTG = TRUE),
+      "NgasMassTotal" = as.numeric(samp$SEDout$dustmass['total']) / RR14_BPL(metallicity[jj], doDTG = TRUE),
       "LP" = samp$LP,
       user_func(samp)
     )
@@ -565,10 +593,10 @@ calc_astro = function(bestfit, highout, newDust = TRUE, specz = FALSE, user_func
   }
   doParallel::stopImplicitCluster()
 
-  if(newDust){
+  if(newDust & is_metallicity){
     ## Use the most up to date dust stuff from D'Silva+26 otherwise use defaults used in the fit and stored in Data
     bestfit$Data$Dale_M2L_func = function(alpha_SF){
-      ProSpect::Dale_M2L_variableDTH_func(alpha_SF = alpha_SF, qPAH_VSG = shivaei24_qPAHZ(10^toppost[jj, 'Zfinal'])) * (0.0073/RR14_BPL(10^toppost[jj, 'Zfinal']))
+      ProSpect::Dale_M2L_variableDTH_func(alpha_SF = alpha_SF, qPAH_VSG = shivaei24_qPAHZ(metallicity_best)) * (0.0073/RR14_BPL(metallicity_best))
     }
   }
   extra_parm = bestfit$parm
@@ -586,9 +614,9 @@ calc_astro = function(bestfit, highout, newDust = TRUE, specz = FALSE, user_func
     "DustMassBirth" = as.numeric(bestfit$SEDout$dustmass['birth']),
     "DustMassScreen" = as.numeric(bestfit$SEDout$dustmass['screen']),
     "DustMassTotal" = as.numeric(bestfit$SEDout$dustmass['total']),
-    "NgasMassBirth" = as.numeric(bestfit$SEDout$dustmass['birth']) / RR14_BPL(as.numeric(10^bestfit$parm['Zfinal']), doDTG = TRUE),
-    "NgasMassScreen" = as.numeric(bestfit$SEDout$dustmass['screen']) / RR14_BPL(as.numeric(10^bestfit$parm['Zfinal']), doDTG = TRUE),
-    "NgasMassTotal" = as.numeric(bestfit$SEDout$dustmass['total']) / RR14_BPL(as.numeric(10^bestfit$parm['Zfinal']), doDTG = TRUE),
+    "NgasMassBirth" = as.numeric(bestfit$SEDout$dustmass['birth']) / RR14_BPL(metallicity_best, doDTG = TRUE),
+    "NgasMassScreen" = as.numeric(bestfit$SEDout$dustmass['screen']) / RR14_BPL(metallicity_best, doDTG = TRUE),
+    "NgasMassTotal" = as.numeric(bestfit$SEDout$dustmass['total']) / RR14_BPL(metallicity_best, doDTG = TRUE),
     "LP" = bestfit$LP,
     user_func(bestfit)
   )
