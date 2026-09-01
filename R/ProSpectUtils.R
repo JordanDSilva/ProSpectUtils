@@ -533,12 +533,12 @@ calc_astro = function(bestfit, highout, newDust = TRUE, specz = FALSE, user_func
   toppost = post[which(post$LP > chisq_cut),]
   toppost$LP <- NULL
 
-  is_metallicity = !is.null(grepl("Z", Data$parm.names))
+  is_metallicity = any(Data$parm.names == "Z")
   if(is_metallicity){
-    metallicity = as.matrix(toppost)[, which(grepl("Z", Data$parm.names))]
-    metallicity_best = bestfit$parm[grepl("Z", Data$parm.names)]
+    metallicity = as.matrix(toppost)[, which(Data$parm.names == "Z")]
+    metallicity_best = bestfit$parm[Data$parm.names == "Z"]
 
-    if(Data$logged[grepl("Z", Data$parm.names)]){
+    if(Data$logged[Data$parm.names == "Z"]){
       metallicity = as.numeric(10^metallicity)
       metallicity_best = as.numeric(10^metallicity_best)
     }
